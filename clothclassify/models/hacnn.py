@@ -1,8 +1,10 @@
+from collections import OrderedDict
+
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-__all__ = ['HACNN']
+__all__ = ['hacnn']
 
 
 class ConvBlock(nn.Module):
@@ -411,3 +413,29 @@ class HACNN(nn.Module):
 
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
+
+
+def fix_state_dict(state_dict):
+    # Удаляем слои классификации
+    state_dict.popitem(last=True)
+    state_dict.popitem(last=True)
+    return state_dict
+
+
+def init_pretrained_weights(model):
+    state_dict = torch.load('checkpoint/hacnn_market_xent.pth.tar',
+                            weights_only=False, encoding='latin1')['state_dict']
+    state_dict = fix_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
+
+
+def hacnn(num_classes=751, pretrained=True, loss='softmax', **kwargs):
+    # standard size (width x1.0)
+    model = HACNN(
+        num_classes,
+        loss=loss,
+        **kwargs
+    )
+    if pretrained:
+        init_pretrained_weights(model)
+    return model

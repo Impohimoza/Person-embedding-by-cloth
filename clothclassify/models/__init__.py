@@ -9,15 +9,9 @@ __model_factory = {
     'mobilenetv2_x1_0': mobilenetv2_x1_0,
     'mobilenetv2_x1_4': mobilenetv2_x1_4,
     'osnet_x1_0': osnet_x1_0,
-    'osnet_x0_75': osnet_x0_75,
-    'osnet_x0_5': osnet_x0_5,
-    'osnet_x0_25': osnet_x0_25,
     'osnet_ibn_x1_0': osnet_ibn_x1_0,
     'osnet_ain_x1_0': osnet_ain_x1_0,
-    'osnet_ain_x0_75': osnet_ain_x0_75,
-    'osnet_ain_x0_5': osnet_ain_x0_5,
-    'osnet_ain_x0_25': osnet_ain_x0_25,
-    'hacnn': HACNN,
+    'hacnn': hacnn,
 }
 
 

@@ -1,21 +1,17 @@
+from collections import OrderedDict
+
 import warnings
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 __all__ = [
-    'osnet_ain_x1_0', 'osnet_ain_x0_75', 'osnet_ain_x0_5', 'osnet_ain_x0_25'
+    'osnet_ain_x1_0'
 ]
 
-pretrained_urls = {
+pretrained_path = {
     'osnet_ain_x1_0':
-    'https://drive.google.com/uc?id=1-CaioD9NaqbHK_kzSMW8VE4_3KcsRjEo',
-    'osnet_ain_x0_75':
-    'https://drive.google.com/uc?id=1apy0hpsMypqstfencdH-jKIUEFOW4xoM',
-    'osnet_ain_x0_5':
-    'https://drive.google.com/uc?id=1KusKvEYyKGDTUBVRxRiz55G31wkihB6l',
-    'osnet_ain_x0_25':
-    'https://drive.google.com/uc?id=1SxQt2AvmEcgWNhaRb2xC4rP6ZwVDP0Wt'
+    'checkpoint/osnet_ain_ms_d_c.pth.tar',
 }
 
 
@@ -447,6 +443,24 @@ class OSNet(nn.Module):
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
 
+def fix_state_dict(state_dict):
+    # Удаляем слои классификации
+    state_dict.popitem(last=True)
+    state_dict.popitem(last=True)
+    
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:] if k.startswith('module.') else k  # удаляем 'module.' если есть
+        new_state_dict[name] = v
+    return new_state_dict
+
+
+def init_pretrained_weights(model, key=''):
+    state_dict = torch.load(pretrained_path[key], weights_only=False)['state_dict']
+    state_dict = fix_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
+
+
 ##########
 # Instantiation
 ##########
@@ -465,58 +479,7 @@ def osnet_ain_x1_0(
         conv1_IN=True,
         **kwargs
     )
+    if pretrained:
+        init_pretrained_weights(model, key='osnet_ain_x1_0')
     return model
-
-
-def osnet_ain_x0_75(
-    num_classes=1000, pretrained=True, loss='softmax', **kwargs
-):
-    model = OSNet(
-        num_classes,
-        blocks=[
-            [OSBlockINin, OSBlockINin], [OSBlock, OSBlockINin],
-            [OSBlockINin, OSBlock]
-        ],
-        layers=[2, 2, 2],
-        channels=[48, 192, 288, 384],
-        loss=loss,
-        conv1_IN=True,
-        **kwargs
-    )
-    return model
-
-
-def osnet_ain_x0_5(
-    num_classes=1000, pretrained=True, loss='softmax', **kwargs
-):
-    model = OSNet(
-        num_classes,
-        blocks=[
-            [OSBlockINin, OSBlockINin], [OSBlock, OSBlockINin],
-            [OSBlockINin, OSBlock]
-        ],
-        layers=[2, 2, 2],
-        channels=[32, 128, 192, 256],
-        loss=loss,
-        conv1_IN=True,
-        **kwargs
-    )
-    return model
-
-
-def osnet_ain_x0_25(
-    num_classes=1000, pretrained=True, loss='softmax', **kwargs
-):
-    model = OSNet(
-        num_classes,
-        blocks=[
-            [OSBlockINin, OSBlockINin], [OSBlock, OSBlockINin],
-            [OSBlockINin, OSBlock]
-        ],
-        layers=[2, 2, 2],
-        channels=[16, 64, 96, 128],
-        loss=loss,
-        conv1_IN=True,
-        **kwargs
-    )
     return model

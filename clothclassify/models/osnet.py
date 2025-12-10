@@ -1,23 +1,19 @@
+from collections import OrderedDict
+
 import warnings
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 __all__ = [
-    'osnet_x1_0', 'osnet_x0_75', 'osnet_x0_5', 'osnet_x0_25', 'osnet_ibn_x1_0'
+    'osnet_x1_0', 'osnet_ibn_x1_0'
 ]
 
-pretrained_urls = {
+pretrained_path = {
     'osnet_x1_0':
-    'https://drive.google.com/uc?id=1LaG1EJpHrxdAxKnSCJ_i0u-nbxSAeiFY',
-    'osnet_x0_75':
-    'https://drive.google.com/uc?id=1uwA9fElHOk3ZogwbeY5GkLI6QPTX70Hq',
-    'osnet_x0_5':
-    'https://drive.google.com/uc?id=16DGLbZukvVYgINws8u8deSaOqjybZ83i',
-    'osnet_x0_25':
-    'https://drive.google.com/uc?id=1rb8UN5ZzPKRc_xvtHlyDh-cSz88YX9hs',
+    'checkpoint/osnet_x1_0_market_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip.pth',
     'osnet_ibn_x1_0':
-    'https://drive.google.com/uc?id=1sr90V6irlYYDd4_4ISU2iruoRG8J__6l'
+    'checkpoint/osnet_ibn_x1_0_market1501_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth'
 }
 
 
@@ -437,10 +433,23 @@ class OSNet(nn.Module):
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
 
+def fix_state_dict(state_dict):
+    # Удаляем слои классификации
+    state_dict.popitem(last=True)
+    state_dict.popitem(last=True)
+    return state_dict
+
+
+def init_pretrained_weights(model, key=''):
+    state_dict = torch.load(pretrained_path[key])
+    state_dict = fix_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
+
+
 ##########
 # Instantiation
 ##########
-def osnet_x1_0(num_classes=1000, loss='softmax', **kwargs):
+def osnet_x1_0(num_classes=1000, pretrained=True, loss='softmax', **kwargs):
     # standard size (width x1.0)
     model = OSNet(
         num_classes,
@@ -450,51 +459,8 @@ def osnet_x1_0(num_classes=1000, loss='softmax', **kwargs):
         loss=loss,
         **kwargs
     )
-    return model
-
-
-def osnet_x0_75(num_classes=1000, pretrained=True, loss='softmax', **kwargs):
-    # medium size (width x0.75)
-    model = OSNet(
-        num_classes,
-        blocks=[OSBlock, OSBlock, OSBlock],
-        layers=[2, 2, 2],
-        channels=[48, 192, 288, 384],
-        loss=loss,
-        **kwargs
-    )
     if pretrained:
-        init_pretrained_weights(model, key='osnet_x0_75')
-    return model
-
-
-def osnet_x0_5(num_classes=1000, pretrained=True, loss='softmax', **kwargs):
-    # tiny size (width x0.5)
-    model = OSNet(
-        num_classes,
-        blocks=[OSBlock, OSBlock, OSBlock],
-        layers=[2, 2, 2],
-        channels=[32, 128, 192, 256],
-        loss=loss,
-        **kwargs
-    )
-    if pretrained:
-        init_pretrained_weights(model, key='osnet_x0_5')
-    return model
-
-
-def osnet_x0_25(num_classes=1000, pretrained=True, loss='softmax', **kwargs):
-    # very tiny size (width x0.25)
-    model = OSNet(
-        num_classes,
-        blocks=[OSBlock, OSBlock, OSBlock],
-        layers=[2, 2, 2],
-        channels=[16, 64, 96, 128],
-        loss=loss,
-        **kwargs
-    )
-    if pretrained:
-        init_pretrained_weights(model, key='osnet_x0_25')
+        init_pretrained_weights(model, key='osnet_x1_0')
     return model
 
 
