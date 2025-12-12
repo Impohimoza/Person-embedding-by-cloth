@@ -47,6 +47,7 @@ class SoftmaxDataset(Dataset):
         self.dir = dir
         self.transform = transform
         self.transform_count = transform_count
+        self.is_train = train
         self.classes, files = getFilesList(self.dir)
         self._list_file_with_label = self.build_labels(files)
         
@@ -79,8 +80,16 @@ class SoftmaxDataset(Dataset):
     #     """
     #     random.shuffle(self._list_file_with_label)
     
+    def get_images_with_labels(self):
+        images_with_labels = []
+        for img_path, label in self._list_file_with_label:
+            img = Image.open(img_path)
+            images_with_labels.append((img, label))
+        
+        return images_with_labels
+    
     def __len__(self):
-        if self.transform is not None and self.transform_count > 1:
+        if self.is_train or self.transform is not None and self.transform_count > 1:
             return len(self._list_file_with_label) * self.transform_count
         else:
             return len(self._list_file_with_label)
@@ -122,6 +131,7 @@ class TripletDataset(Dataset):
         self.dir = dir
         self.transform = transform
         self.transform_count = transform_count
+        self.is_train = train
         self.classes, files = getFilesList(self.dir)
         
         self._dict_file_with_label = self.build_index(files)
@@ -162,6 +172,15 @@ class TripletDataset(Dataset):
         
         return files_index
     
+    def get_images_with_labels(self):
+        images_with_labels = []
+        for label, imgs_path in self._dict_file_with_label.items():
+            for img_path in imgs_path:
+                img = Image.open(img_path)
+                images_with_labels.append((img, label))
+        
+        return images_with_labels
+    
     def path2id(self, path: str):
         """_summary_
 
@@ -174,7 +193,7 @@ class TripletDataset(Dataset):
         return self.classes[path.split('/')[-2]]
     
     def __len__(self):
-        if self.transform is None or self.transform_count == 1:
+        if not self.is_train or self.transform is None or self.transform_count == 1:
             return self.length
         else:
             return self.length * 3
