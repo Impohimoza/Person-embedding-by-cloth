@@ -103,6 +103,7 @@ class ImageDataManager:
             num_workers=workers,
             pin_memory=self.use_gpu
         )
+        self.num_train_pids = len(train_set.classes)
     
     def preprocess_img(self, img):
         return self.transform_te(img)

@@ -4,6 +4,7 @@ import time
 import datetime
 
 import torch
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from clothclassify.data.datamanager import ImageDataManager
@@ -14,9 +15,15 @@ from clothclassify.utils import (
 
 class Engine:
     def __init__(self, datamanager: ImageDataManager, use_gpu=True):
+        """A generic base Engine class for both image-
+
+        Args:
+            datamanager (ImageDataManager): an instance of ``clothclassify.data.ImageDataManager``
+            use_gpu (bool, optional): use gpu. Default is True.
+        """
         self.datamanager = datamanager
-        self.train_loader = self.train_loader
-        self.val_loader = self.val_loader_loader
+        self.train_loader = datamanager.train_loader
+        self.val_loader = datamanager.val_loader
         self.use_gpu = use_gpu
         self.writer = None
         self.epoch = 0
@@ -32,7 +39,6 @@ class Engine:
             'epoch': epoch + 1,
             'rank1': rank1,
             'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict()
         }
         fpath = os.path.join(save_dir, 'model.pth.tar-' + str(epoch))
         torch.save(state, fpath)
@@ -69,6 +75,25 @@ class Engine:
         dist_metric='euclidean',
         normalize_feature=False,
     ):
+        """A unified pipeline for training and evaluating a model.
+
+        Args:
+            save_dir (str, optional): directory to save model.. Defaults to 'log'.
+            max_epoch (int, optional): maximum epoch. Defaults to 0.
+            start_epoch (int, optional): starting epoch. Defaults to 0.
+            print_freq (int, optional): print_frequency. Defaults to 10.
+            fixbase_epoch (int, optional): number of epochs to train ``open_layers`` (new layers)
+                while keeping base layers frozen. Default is 0. ``fixbase_epoch`` is counted
+                in ``max_epoch``.
+            open_layers (_type_, optional): ayers (attribute names) open for training. Defaults to None.
+            start_eval (int, optional): from which epoch to start evaluation. Defaults to 0.
+            eval_freq (int, optional): evaluation frequency. Defaults to -1(meaning evaluation
+                is only performed at the end of training).
+            test_only (bool, optional): if True, only runs evaluation on test datasets. Defaults to False.
+            dist_metric (str, optional): distance metric used to compute distance matrix. Defaults to 'euclidean'.
+            normalize_feature (bool, optional): performs L2 normalization on feature vectors before
+                computing feature distance. Defaults to False.
+        """
         if test_only:
             self.test(
                 dist_metric=dist_metric,
@@ -78,7 +103,7 @@ class Engine:
             return
         
         if self.writer is None:
-            self.writer = SummaryWriter(log_dir=save_dir)
+            self.writer = SummaryWriter(log_dir=os.path.join(save_dir, 'tensorlog'))
         
         time_start = time.time()
         self.start_epoch = start_epoch
@@ -170,7 +195,7 @@ class Engine:
                 self.writer.add_scalar('Train/time', batch_time.avg, n_iter)
                 self.writer.add_scalar('Train/data', data_time.avg, n_iter)
                 for name, meter in losses.meters.items():
-                    self.writer.add_scalar('Train/' + name, meter.avg, n_iter)
+                    self.writer.add_scalar(name, meter.avg, n_iter)
                 self.writer.add_scalar(
                     'Train/lr', self.get_current_lr(), n_iter
                 )
@@ -207,3 +232,47 @@ class Engine:
             open_all_layers(self.model)
             
         
+class ImageSoftmaxEngine(Engine):
+    def __init__(
+        self,
+        datamanager: ImageDataManager,
+        model: nn.Module,
+        optimizer,
+        scheduler=None,
+        use_gpu=True
+    ):
+        """Softmax-loss engine for image-reid.
+
+        Args:
+            datamanager (ImageDataManager): an instance of ``clothclassify.data.ImageDataManager``
+            model (nn.Module): model instance.
+            optimizer (Optimizer): an Optimizer.
+            scheduler (LRScheduler, optional): if None, no learning rate decay will be performed.
+            use_gpu (bool, optional): use gpu. Defaults to True.
+        """
+        super().__init__(datamanager, use_gpu)
+        
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        
+        self.criterion = nn.CrossEntropyLoss()
+    
+    def forward_backward(self, data):
+        imgs, pids = data
+        if self.use_gpu:
+            imgs = imgs.cuda()
+            pids = pids.cuda()
+        
+        outputs = self.model(imgs)
+        loss = self.criterion(outputs, pids)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        loss_summary = {
+            'loss': loss.item()
+        }
+        
+        return loss_summary
