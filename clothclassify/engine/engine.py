@@ -8,7 +8,6 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import matplotlib.pyplot as plt
 
 from clothclassify.data.datamanager import ImageDataManager
 from clothclassify.utils import (
@@ -50,7 +49,11 @@ class Engine:
         torch.save(state, fpath)
         print('Checkpoint saved to "{}"'.format(fpath))
         if is_best:
-            shutil.copy(fpath, os.path.join(os.path.dirname(fpath), 'model-best.pth.tar'))
+            shutil.copy(
+                fpath,
+                os.path.join(os.path.dirname(fpath),
+                             'model-best.pth.tar')
+            )
     
     def set_model_mode(self, mode='train'):
         assert mode in ['train', 'eval', 'test']
@@ -115,7 +118,9 @@ class Engine:
             return
         
         if self.writer is None:
-            self.writer = SummaryWriter(log_dir=os.path.join(save_dir, 'tensorlog'))
+            self.writer = SummaryWriter(
+                log_dir=os.path.join(save_dir, 'tensorlog')
+            )
         
         time_start = time.time()
         self.start_epoch = start_epoch
@@ -194,7 +199,8 @@ class Engine:
                 nb_future_epochs = (
                     self.max_epoch - (self.epoch + 1)
                 ) * self.num_batches
-                eta_seconds = batch_time.avg * (nb_this_epoch+nb_future_epochs)
+                eta_seconds = batch_time.avg * \
+                    (nb_this_epoch + nb_future_epochs)
                 eta_str = str(datetime.timedelta(seconds=int(eta_seconds)))
                 
                 print(
@@ -305,7 +311,12 @@ class Engine:
         
         if self.writer is not None:
             self.writer.add_scalar('Test/rank1', cmc[1], self.epoch)
-            self.writer.add_embedding(f, metadata=pids, global_step=self.epoch, tag='embedding')
+            self.writer.add_embedding(
+                f,
+                metadata=pids,
+                global_step=self.epoch,
+                tag='embedding'
+            )
         
         return cmc[1]
     
@@ -361,6 +372,55 @@ class ImageSoftmaxEngine(Engine):
         
         outputs = self.model(imgs)
         loss = self.criterion(outputs, pids)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        loss_summary = {
+            'loss': loss.item()
+        }
+        
+        return loss_summary
+
+
+class ImageTripletEngine(Engine):
+    def __init__(
+        self,
+        datamanager: ImageDataManager,
+        model: nn.Module,
+        optimizer,
+        scheduler=None,
+        use_gpu=True
+    ):
+        """Triplet-loss engine for image-reid.
+
+        Args:
+            datamanager (ImageDataManager): an instance of ``clothclassify.data.ImageDataManager``
+            model (nn.Module): model instance.
+            optimizer (Optimizer): an Optimizer.
+            scheduler (LRScheduler, optional): if None, no learning rate decay will be performed.
+            use_gpu (bool, optional): use gpu. Defaults to True.
+        """
+        super().__init__(datamanager, use_gpu)
+        
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        
+        self.criterion = nn.TripletMarginLoss()
+    
+    def forward_backward(self, data):
+        anchor, pos, neg = data
+        if self.use_gpu:
+            anchor = anchor.cuda()
+            pos = pos.cuda()
+            neg = neg.cuda()
+        
+        _, anchor_outputs = self.model(anchor)
+        _, pos_outputs = self.model(pos)
+        _, neg_outputs = self.model(neg)
+        loss = self.criterion(anchor_outputs, pos_outputs, neg_outputs)
         
         self.optimizer.zero_grad()
         loss.backward()

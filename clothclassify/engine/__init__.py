@@ -1,1 +1,1 @@
-from .engine import ImageSoftmaxEngine
+from .engine import ImageSoftmaxEngine, ImageTripletEngine
