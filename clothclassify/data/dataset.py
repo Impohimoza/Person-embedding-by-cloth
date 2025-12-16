@@ -2,6 +2,7 @@ import functools
 import glob
 import random
 import itertools
+from collections import defaultdict
 
 from torch.utils.data import Dataset
 from PIL import Image
@@ -81,10 +82,11 @@ class SoftmaxDataset(Dataset):
     #     random.shuffle(self._list_file_with_label)
     
     def get_images_with_labels(self):
-        images_with_labels = []
+        images_with_labels = defaultdict(list)
         for img_path, label in self._list_file_with_label:
             img = Image.open(img_path)
-            images_with_labels.append((img, label))
+            img = self.transform(img)
+            images_with_labels[label].append(img)
         
         return images_with_labels
     
@@ -139,13 +141,13 @@ class TripletDataset(Dataset):
         if train and val_stride > 0:
             self._dict_file_with_label = \
                 {k: v for k, v in self._dict_file_with_label.items()
-                 if k == 0 or k % val_stride != 0}
+                 if k % val_stride != 0}
             assert self._dict_file_with_label, 'dataset empty'
         elif not train:
             assert val_stride > 0, f'val_stride cant = {val_stride}'
             self._dict_file_with_label = \
                 {k: v for k, v in self._dict_file_with_label.items()
-                 if k != 0 and k % val_stride == 0}
+                 if k % val_stride == 0}
         
         self.length = sum(
             [len(v) for v in self._dict_file_with_label.values()]
@@ -173,11 +175,12 @@ class TripletDataset(Dataset):
         return files_index
     
     def get_images_with_labels(self):
-        images_with_labels = []
+        images_with_labels = defaultdict(list)
         for label, imgs_path in self._dict_file_with_label.items():
             for img_path in imgs_path:
                 img = Image.open(img_path)
-                images_with_labels.append((img, label))
+                img = self.transform(img)
+                images_with_labels[label].append(img)
         
         return images_with_labels
     
@@ -199,22 +202,30 @@ class TripletDataset(Dataset):
             return self.length * 3
     
     def __getitem__(self, index: int):
-        ndx = index % len(self.files)
-        anchor_path = self.files[ndx]
-        
-        positive_path = self.find_positive(anchor_path)
-        negative_path = self.find_negative(anchor_path)
-        
-        anchor = Image.open(anchor_path)
-        positive = Image.open(positive_path)
-        negative = Image.open(negative_path)
-        
-        if self.transform is not None:
-            anchor = self.transform(anchor)
-            positive = self.transform(positive)
-            negative = self.transform(negative)
-        
-        return anchor, positive, negative
+        if self.is_train:
+            ndx = index % len(self.files)
+            anchor_path = self.files[ndx]
+            
+            positive_path = self.find_positive(anchor_path)
+            negative_path = self.find_negative(anchor_path)
+            
+            anchor = Image.open(anchor_path)
+            positive = Image.open(positive_path)
+            negative = Image.open(negative_path)
+            
+            if self.transform is not None:
+                anchor = self.transform(anchor)
+                positive = self.transform(positive)
+                negative = self.transform(negative)
+            
+            return anchor, positive, negative
+        else:
+            img_path = self.files[index]
+            label = self.classes[img_path.split('/')[-2]]
+            
+            img = Image.open(img_path)
+            img = self.transform(img)
+            return img, label
     
     def find_positive(self, anchor_path: str):
         """Getting positive img for path

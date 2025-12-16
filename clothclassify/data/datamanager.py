@@ -17,7 +17,8 @@ class ImageDataManager:
         loss_fn='softmax',
         batch_size_train=32,
         batch_size_val=32,
-        workers=4
+        workers=4,
+        val_stride=10
     ):
         """Image data manager.
 
@@ -69,24 +70,28 @@ class ImageDataManager:
             train_set = SoftmaxDataset(
                 root,
                 transform=self.transform_tr,
-                transform_count=len(transforms)
+                transform_count=len(transforms),
+                val_stride=val_stride
             )
             
             val_set = SoftmaxDataset(
                 root,
                 train=False,
-                transform=self.transform_te
+                transform=self.transform_te,
+                val_stride=val_stride
             )
         else:
             train_set = TripletDataset(
                 root,
                 transform=self.transform_tr,
-                transform_count=len(transforms)
+                transform_count=len(transforms),
+                val_stride=val_stride
             )
             val_set = TripletDataset(
                 root,
                 train=False,
-                transform=self.transform_te
+                transform=self.transform_te,
+                val_stride=val_stride
             )
         
         self.train_loader = torch.utils.data.DataLoader(

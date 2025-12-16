@@ -5,11 +5,14 @@ import datetime
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+import matplotlib.pyplot as plt
 
 from clothclassify.data.datamanager import ImageDataManager
 from clothclassify.utils import (
-    AverageMeter, MetricMeter, open_all_layers, open_specified_layers
+    AverageMeter, MetricMeter, open_all_layers, open_specified_layers, metrics
 )
 
 
@@ -40,7 +43,10 @@ class Engine:
             'rank1': rank1,
             'optimizer': self.optimizer.state_dict(),
         }
-        fpath = os.path.join(save_dir, 'model.pth.tar-' + str(epoch))
+        dirpath = os.path.join(save_dir, 'checkpoint')
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        fpath = os.path.join(dirpath, 'model.pth.tar-' + str(epoch))
         torch.save(state, fpath)
         print('Checkpoint saved to "{}"'.format(fpath))
         if is_best:
@@ -74,6 +80,8 @@ class Engine:
         test_only=False,
         dist_metric='euclidean',
         normalize_feature=False,
+        visrank_topk=10,
+        ranks=[1, 5, 10, 20],
     ):
         """A unified pipeline for training and evaluating a model.
 
@@ -93,12 +101,16 @@ class Engine:
             dist_metric (str, optional): distance metric used to compute distance matrix. Defaults to 'euclidean'.
             normalize_feature (bool, optional): performs L2 normalization on feature vectors before
                 computing feature distance. Defaults to False.
+            visrank_topk (int, optional): top-k ranked images to be visualized. Default is 10.
+            ranks (list, optional): cmc ranks to be computed. Default is [1, 5, 10, 20].
         """
         if test_only:
             self.test(
                 dist_metric=dist_metric,
                 normalize_feature=normalize_feature,
                 save_dir=save_dir,
+                ranks=ranks,
+                visrank_topk=visrank_topk
             )
             return
         
@@ -108,6 +120,8 @@ class Engine:
         time_start = time.time()
         self.start_epoch = start_epoch
         self.max_epoch = max_epoch
+        
+        self.top_rank1 = 0
         print('=> Start training')
         
         for self.epoch in range(self.start_epoch, self.max_epoch):
@@ -125,8 +139,14 @@ class Engine:
                     dist_metric=dist_metric,
                     normalize_feature=normalize_feature,
                     save_dir=save_dir,
+                    ranks=ranks,
+                    visrank_topk=visrank_topk,
                 )
-                self.save_model(self.epoch, rank1, save_dir)
+                if self.top_rank1 <= rank1:
+                    self.top_rank1 = rank1
+                    self.save_model(self.epoch, rank1, save_dir, True)
+                else:
+                    self.save_model(self.epoch, rank1, save_dir)
                     
         if self.max_epoch > 0:
             print('=> Final test')
@@ -134,8 +154,14 @@ class Engine:
                 dist_metric=dist_metric,
                 normalize_feature=normalize_feature,
                 save_dir=save_dir,
+                ranks=ranks,
+                visrank_topk=visrank_topk
             )
-            self.save_model(self.epoch, rank1, save_dir)
+            if self.top_rank1 <= rank1:
+                self.top_rank1 = rank1
+                self.save_model(self.epoch, rank1, save_dir, True)
+            else:
+                self.save_model(self.epoch, rank1, save_dir)
         
         elapsed = round(time.time() - time_start)
         elapsed = str(datetime.timedelta(seconds=elapsed))
@@ -211,9 +237,78 @@ class Engine:
         dist_metric='euclidean',
         normalize_feature=False,
         save_dir='',
+        ranks=[1, 5, 10, 20],
+        visrank_topk=10
     ):
-        pass
-
+        self.set_model_mode('eval')
+        print('##### Evaluating #####')
+        
+        rank1 = self._evaluate(
+            self.val_loader,
+            ranks=ranks,
+            visrank_topk=visrank_topk,
+        )
+        
+        return rank1
+    
+    @torch.no_grad()
+    def _evaluate(
+        self,
+        dataloader,
+        dist_metric='euclidean',
+        normalize_feature=False,
+        save_dir='',
+        ranks=[1, 5, 10, 20],
+        visrank_topk=10
+    ):
+        batch_time = AverageMeter()
+        
+        def _feature_extraction(data_loader):
+            f_, pids_ = [], []
+            for data in data_loader:
+                imgs, pids = data
+                if self.use_gpu:
+                    imgs = imgs.cuda()
+                end = time.time()
+                features = self.model(imgs)
+                batch_time.update(time.time() - end)
+                features = features.cpu()
+                f_.append(features)
+                pids_.extend(pids.tolist())
+            f_ = torch.cat(f_, 0)
+            pids_ = np.asarray(pids_)
+            return f_, pids_
+        
+        f, pids = _feature_extraction(dataloader)
+        
+        print('Speed: {:.4f} sec/batch'.format(batch_time.avg))
+        
+        if normalize_feature:
+            f = F.normalize(f, p=2, dim=1)
+        
+        print(
+            'Computing distance matrix with metric={} ...'.format(dist_metric)
+        )
+        
+        distmat = metrics.compute_distance_matrix(f, f, dist_metric)
+        distmat = distmat.numpy()
+        
+        print('Computing CMC...')
+        
+        cmc = metrics.evaluate_rank(distmat, pids, ranks)
+        
+        print('** Results **')
+        
+        print('CMC curve')
+        for i, r in enumerate(ranks):
+            print('Rank-{:<3}: {:.1%}'.format(r, cmc[r]))
+        
+        if self.writer is not None:
+            self.writer.add_scalar('Test/rank1', cmc[1], self.epoch)
+            self.writer.add_embedding(f, metadata=pids, global_step=self.epoch, tag='embedding')
+        
+        return cmc[1]
+    
     def two_stepped_transfer_learning(
         self, epoch, fixbase_epoch, open_layers
     ):
