@@ -20,6 +20,8 @@ Installation
     pip install -r requirements.txt
 
     # Установите torch и torchvision (выберите подходящую версию CUDA для вашего компьютера)
+    pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+
 
 Начало работы
 -------------
