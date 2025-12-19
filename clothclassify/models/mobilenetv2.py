@@ -254,12 +254,12 @@ def mobilenetv2_x1_0(num_classes, loss, pretrained=True, **kwargs):
     return model
 
 
-def mobilenetv2_x1_4(num_classes, loss, pretrained=True, **kwargs):
+def mobilenetv2_x1_4(num_classes, loss, pretrained=True, fc_dims=None, **kwargs):
     model = MobileNetV2(
         num_classes,
         loss=loss,
         width_mult=1.4,
-        fc_dims=None,
+        fc_dims=fc_dims,
         dropout_p=None,
         **kwargs
     )

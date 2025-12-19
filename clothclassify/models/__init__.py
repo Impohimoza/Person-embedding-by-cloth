@@ -26,7 +26,12 @@ def show_avai_models():
     
 
 def build_model(
-    name, num_classes, loss='softmax', pretrained=True, use_gpu=True
+    name,
+    num_classes,
+    loss='softmax',
+    pretrained=True,
+    use_gpu=True,
+    fc_dims=None
 ):
     """A function wrapper for building a model.
 
@@ -38,6 +43,7 @@ def build_model(
         pretrained (bool, optional): whether to load ImageNet-pretrained weights.
             Default is True.
         use_gpu (bool, optional): whether to use gpu. Default is True.
+        use_gpu (list, optional): dimensions of fc layers, if None, no fc layers are constructed.
 
     Returns:
         nn.Module
@@ -55,5 +61,6 @@ def build_model(
         num_classes=num_classes,
         loss=loss,
         pretrained=pretrained,
-        use_gpu=use_gpu
+        use_gpu=use_gpu,
+        fc_dims=fc_dims
     )

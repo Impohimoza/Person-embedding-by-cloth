@@ -209,9 +209,9 @@ class TripletDataset(Dataset):
             positive_path = self.find_positive(anchor_path)
             negative_path = self.find_negative(anchor_path)
             
-            anchor = Image.open(anchor_path)
-            positive = Image.open(positive_path)
-            negative = Image.open(negative_path)
+            anchor = Image.open(anchor_path).convert('RGB')
+            positive = Image.open(positive_path).convert('RGB')
+            negative = Image.open(negative_path).convert('RGB')
             
             if self.transform is not None:
                 anchor = self.transform(anchor)
@@ -223,7 +223,7 @@ class TripletDataset(Dataset):
             img_path = self.files[index]
             label = self.classes[img_path.split('/')[-2]]
             
-            img = Image.open(img_path)
+            img = Image.open(img_path).convert('RGB')
             img = self.transform(img)
             return img, label
     

@@ -4,7 +4,8 @@ from collections import deque
 import torch
 from PIL import Image
 from torchvision.transforms import (
-    Resize, Compose, ToTensor, Normalize, ColorJitter, RandomHorizontalFlip
+    Resize, Compose, ToTensor, Normalize, ColorJitter, RandomHorizontalFlip,
+    GaussianBlur, RandomAffine
 )
 
 
@@ -298,7 +299,23 @@ def build_transforms(
         transform_tr += [
             ColorJitter(brightness=0.2, contrast=0.15, saturation=0, hue=0)
         ]
-
+        
+    if 'gaussian_blur':
+        print('+ gaussian blur')
+        transform_tr += [
+            GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.0))
+        ]
+        
+    if 'random_affine':
+        print('+ random affine')
+        transform_tr += [
+            RandomAffine(
+                degrees=15,
+                scale=(1.0, 1.2),
+                translate=(0.05, 0.05)
+            )
+        ]
+        
     print('+ to torch tensor of range [0, 1]')
     transform_tr += [ToTensor()]
 
