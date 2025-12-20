@@ -429,11 +429,12 @@ def init_pretrained_weights(model):
     model.load_state_dict(state_dict, strict=False)
 
 
-def hacnn(num_classes=751, pretrained=True, loss='softmax', **kwargs):
+def hacnn(num_classes=751, pretrained=True, loss='softmax',  **kwargs):
     # standard size (width x1.0)
     model = HACNN(
         num_classes,
         loss=loss,
+        learn_region=False,
         **kwargs
     )
     if pretrained:
